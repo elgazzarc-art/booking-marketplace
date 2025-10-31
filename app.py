@@ -204,6 +204,87 @@ def book():
                                service_name=service[0], price=service[1],
                                slot_display=slot_display, zip_code=zip_code, date=date_str)
 
+    # ——— POST: Save booking & write to Google Calendar ———
+    if not request.form.get('learner_permit'):
+        flash("You must confirm you have a Learner's Permit")
+        return redirect(request.url)
+
+    meet_location = request.form['meet_location'].strip()
+    if not meet_location:
+        flash("Please enter a meet location")
+        return redirect(request.url)
+
+    # Gather data
+    slot = request.form['slot']
+    partner_id = request.form['partner_id']
+    service_id = request.form['service_id']
+    name = request.form['name'].strip()
+    email = request.form['email'].strip()
+    zip_code = request.form['zip_code'].strip()
+    date_str = request.form['date']
+
+    # Load partner
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+    c.execute('SELECT name, email, calendar_type FROM partners WHERE id = ?', (partner_id,))
+    partner_row = c.fetchone()
+    conn.close()
+    if not partner_row:
+        flash("Partner not found")
+        return redirect(url_for('index'))
+
+    partner_name, partner_email, calendar_type = partner_row
+
+    # Parse slot time
+    try:
+        slot_dt = datetime.datetime.fromisoformat(slot)
+        location = get_location_for_zip(zip_code)
+        local_tz_str = location['timezone']
+        local_tz = pytz.timezone(local_tz_str)
+        if slot_dt.tzinfo is None:
+            slot_dt = local_tz.localize(slot_dt)
+    except Exception as e:
+        flash("Invalid time")
+        return redirect(url_for('index'))
+
+    # ——— GOOGLE CALENDAR INSERT (SERVICE ACCOUNT) ———
+    if calendar_type == 'google':
+        try:
+            service = get_service_for_partner("")  # token_path ignored
+            event = {
+                'summary': f'Lesson: {name}',
+                'description': (
+                    f'Client: {name}\n'
+                    f'Email: {email}\n'
+                    f'Service: {request.form.get("service_name")}\n'
+                    f'Price: ${request.form.get("price")}\n'
+                    f'Meet: {meet_location}\n'
+                    f'Zip: {zip_code}'
+                ),
+                'start': {
+                    'dateTime': slot_dt.astimezone(pytz.UTC).isoformat(),
+                    'timeZone': local_tz_str
+                },
+                'end': {
+                    'dateTime': (slot_dt + datetime.timedelta(hours=1))
+                                .astimezone(pytz.UTC).isoformat(),
+                    'timeZone': local_tz_str
+                },
+            }
+            # ←←← CHANGE THIS TO YOUR PERSONAL EMAIL ←←←
+            created_event = service.events().insert(
+                calendarId='elgazzarc@gmail.com',  # ← REPLACE!
+                body=event
+            ).execute()
+            print(f"Event created: {created_event.get('htmlLink')}")
+            flash(f"Booked with {partner_name} at {slot_dt.strftime('%I:%M %p')}!")
+        except Exception as e:
+            print(f"Calendar error: {e}")
+            flash("Booking failed — calendar error")
+    else:
+        flash("Only Google Calendar supported for now")
+    
+    return redirect(url_for('index'))
     # POST → Save & go to payment
     if not request.form.get('learner_permit'):
         flash("You must confirm Learner's Permit")
@@ -265,5 +346,6 @@ def join():
     
 # --- INIT ---
 init_db()
+
 
 
