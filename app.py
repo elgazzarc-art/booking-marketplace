@@ -123,20 +123,15 @@ def init_db():
     conn.close()
 
 def get_location_for_zip(zip_code: str) -> dict:
-    # Hardcoded fallback — us.zips is broken on Render
-    fallback = {
-        '10001': ('New York', 'NY'),
-        '10002': ('New York', 'NY'),
-        '90210': ('Beverly Hills', 'CA'),
-        '60601': ('Chicago', 'IL'),
-    }
-    city, state = fallback.get(zip_code, ('Unknown City', 'XX'))
-    return {
-        'city': city,
-        'state': state,
-        'timezone': 'America/New_York',
-        'display': f"{city}, {state}"
-    }
+    try:
+        zip_info = us.zips.get(zip_code)
+        if zip_info:
+            return {
+                'city': zip_info.city,
+                'state': zip_info.state,
+                'timezone': 'America/New_York',
+                'display': f"{zip_info.city}, {zip_info.state}"
+            }
     except Exception as e:
         print(f"ZIP lookup failed: {e}")
     
@@ -147,7 +142,7 @@ def get_location_for_zip(zip_code: str) -> dict:
         'timezone': 'America/New_York',
         'display': 'New York, NY'
     }
-
+    
 def get_partners_by_zip(zip_code: str) -> List[Partner]:
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
@@ -291,6 +286,7 @@ init_db()
 
 if __name__ == '__main__':
     app.run(debug=True)
+
 
 
 
