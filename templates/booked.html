@@ -1,0 +1,11 @@
+<!-- templates/booked.html -->
+<!DOCTYPE html>
+<html>
+<head><title>Booked!</title></head>
+<body>
+  <h1>You're Booked, {{ name }}!</h1>
+  <p>Time: {{ time[:16] | replace('T', ' ') }}</p>
+  <p>Check your partner's Google Calendar — the event is there!</p>
+  <a href="/">Book Another</a>
+</body>
+</html>

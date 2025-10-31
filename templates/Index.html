@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Book a Pro</title>
+  <style>
+    body {font-family: Arial; margin: 40px;}
+    input, button, select {padding: 10px; margin: 5px; font-size: 16px;}
+  </style>
+</head>
+<body>
+  <h1>Book a Local Pro</h1>
+  <form method="POST">
+    <input type="text" name="zip_code" placeholder="Zip Code" maxlength="5" required>
+    <input type="date" name="date" min="{{ today }}" required>
+    <button type="submit">Search Availability</button>
+  </form>
+  <p><a href="/join">Are you a pro? Join here</a></p>
+  {% with messages = get_flashed_messages() %}
+    {% if messages %}
+      <ul>{% for msg in messages %}<li style="color:red;">{{ msg }}</li>{% endfor %}</ul>
+    {% endif %}
+  {% endwith %}
+</body>
+</html>

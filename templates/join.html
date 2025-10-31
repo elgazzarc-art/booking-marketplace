@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Join as Pro</title>
+  <style>
+    body {font-family: Arial; margin: 40px;}
+    input, button, textarea, select {padding: 10px; margin: 5px; font-size: 16px; width: 300px;}
+    textarea {width: 400px; height: 80px;}
+    form {max-width: 500px;}
+    .tip {background: #e3f2fd; padding: 10px; border-radius: 5px; margin: 15px 0;}
+    label {font-weight: bold;}
+  </style>
+</head>
+<body>
+  <h1>Join the Marketplace as a Pro</h1>
+  <p>Connect your calendar and start getting bookings!</p>
+  
+  <form method="POST" action="/join">
+    <label>Business Name</label><br>
+    <input type="text" name="name" placeholder="e.g., Sarah's Plumbing" required><br>
+
+    <label>Your Email (for calendar sync)</label><br>
+    <input type="email" name="email" placeholder="you@gmail.com" required><br>
+
+    <label>Description</label><br>
+    <input type="text" name="description" placeholder="Fast & reliable service" required><br>
+
+    <label>Zip Codes You Serve (comma-separated)</label><br>
+    <textarea name="zip_codes" placeholder="10001, 10002, 90210, 60601" required></textarea><br>
+
+    <!-- STEP 2: ADD THIS DROPDOWN -->
+    <label>Calendar Type</label><br>
+    <select name="calendar_type" required>
+      <option value="google">Google Calendar</option>
+      <option value="outlook">Microsoft Outlook / Office 365</option>
+      <option value="apple">Apple iCloud</option>
+      <option value="custom">Custom (Webhook)</option>
+    </select><br>
+    <!-- END STEP 2 -->
+
+    <button type="submit">Join & Connect Calendar</button>
+  </form>
+  
+  <div class="tip">
+    <strong>Tip:</strong> After joining, search your zip code to connect your calendar. You'll be prompted to log in.
+  </div>
+  
+  <br><a href="/">Back to Search</a>
+  
+  {% with messages = get_flashed_messages() %}
+    {% if messages %}
+      <ul>{% for msg in messages %}<li style="color:green;">{{ msg }}</li>{% endfor %}</ul>
+    {% endif %}
+  {% endwith %}
+</body>
+</html>

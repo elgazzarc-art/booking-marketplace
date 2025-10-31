@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Available Pros in {{ city }}, {{ state }}</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    body {font-family: Arial, sans-serif; margin: 20px; background: #f8f9fa;}
+    .container {max-width: 900px; margin: 0 auto;}
+    h1 {color: #2c3e50; text-align: center;}
+    h2 {color: #34495e; border-bottom: 2px solid #3498db; padding-bottom: 8px;}
+    .search-box {background: #fff; padding: 20px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); margin-bottom: 30px;}
+    input, button {padding: 12px; margin: 8px; font-size: 16px; border-radius: 5px; border: 1px solid #ddd;}
+    input[type="text"], input[type="date"] {width: 200px;}
+    button {background: #3498db; color: white; border: none; cursor: pointer;}
+    button:hover {background: #2980b9;}
+    .partner {background: white; margin: 15px 0; padding: 20px; border-radius: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);}
+    .partner h3 {margin: 0 0 8px; color: #2c3e50;}
+    .rating {color: #f39c12; font-weight: bold;}
+    .description {color: #7f8c8d; font-style: italic; margin: 8px 0;}
+    .slots {margin-top: 12px;}
+    .slot {display: inline-block; margin: 5px;}
+    .slot button {
+      background: #27ae60; color: white; border: none; padding: 8px 12px; border-radius: 5px; cursor: pointer; font-size: 14px;
+    }
+    .slot button:disabled {background: #95a5a6; cursor: not-allowed;}
+    .slot button:hover:not(:disabled) {background: #219653;}
+    .connect {margin-top: 10px;}
+    .connect a {color: #3498db; font-weight: bold; text-decoration: none;}
+    .connect a:hover {text-decoration: underline;}
+    .back {text-align: center; margin: 20px 0;}
+    .back a {color: #3498db; text-decoration: none; font-size: 16px;}
+    .back a:hover {text-decoration: underline;}
+    .flash {padding: 12px; margin: 10px 0; border-radius: 5px; background: #d4edda; color: #155724; border: 1px solid #c3e6cb;}
+    .flash.error {background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb;}
+    .no-results {text-align: center; color: #7f8c8d; font-style: italic; padding: 40px;}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Book a Pro</h1>
+
+    <!-- Flash Messages -->
+    {% with messages = get_flashed_messages() %}
+      {% if messages %}
+        {% for msg in messages %}
+          <div class="flash">{{ msg }}</div>
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
+
+    <!-- Search Box -->
+    <div class="search-box">
+      <form method="GET" action="/">
+        <input type="text" name="zip_code" placeholder="Enter ZIP Code" value="{{ zip_code }}" required maxlength="5">
+        <input type="date" name="date" value="{{ request.args.get('date', '') }}" required>
+        <button type="submit">Search</button>
+      </form>
+    </div>
+
+    <!-- Results -->
+    {% if availability %}
+      <h2>Available in <strong>{{ city }}, {{ state }}</strong> ({{ zip_code }}) on {{ date }}</h2>
+      <p><em>Times shown in {{ city }} local time</em></p>
+
+      {% for partner_id, data in availability.items() %}
+        {% set partner = data.partner %}
+        <div class="partner">
+          <h3>{{ partner.name }} <span class="rating">Rating: {{ partner.rating }}</span></h3>
+          <p class="description">{{ partner.description }}</p>
+
+          <!-- Outlook Connect Button -->
+          {% if partner.calendar_type == 'outlook' and not (partner.id | string + '.json') in [] %}
+            <div class="connect">
+              <a href="{{ url_for('login_outlook', partner_id=partner.id) }}">Connect Outlook Calendar</a>
+            </div>
+          {% endif %}
+
+          <div class="slots">
+            <strong>Available Times:</strong><br>
+            {% for slot in data.slots %}
+              <span class="slot">
+                <form method="GET" action="/book" style="display:inline;">
+                  <input type="hidden" name="slot" value="{{ slot.start }}">
+                  <input type="hidden" name="partner_id" value="{{ partner.id }}">
+                  <input type="hidden" name="zip" value="{{ zip_code }}">
+                  <input type="hidden" name="date" value="{{ request.args.get('date') }}">
+                  <input type="text" name="name" placeholder="Your Name" required style="width:120px; font-size:12px; padding:6px; margin:2px;">
+                  <input type="email" name="email" placeholder="Email" required style="width:140px; font-size:12px; padding:6px; margin:2px;">
+                  <button type="submit">{{ slot.display }}</button>
+                </form>
+              </span>
+            {% else %}
+              <em>No available slots</em>
+            {% endfor %}
+          </div>
+        </div>
+      {% endfor %}
+
+    {% else %}
+      <div class="no-results">
+        <p>No pros available in {{ city }}, {{ state }} on this date.</p>
+        <p><a href="/">Try another zip code or date</a></p>
+      </div>
+    {% endif %}
+
+    <div class="back">
+      <a href="/">New Search</a> • 
+      <a href="/join">Are you a pro? Join here</a>
+    </div>
+  </div>
+</body>
+</html>
