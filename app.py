@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from typing import List
 import us  # zip → state → timezone
 
-app = Flask(__name__)
+app = Flask(__name__, template_folder='templates')
 app.secret_key = 'your-secret-key-change-me-here'  # CHANGE THIS!
 SCOPES = ['https://www.googleapis.com/auth/calendar']
 DB_NAME = 'partners.db'
@@ -382,4 +382,5 @@ def join():
 # --- INIT & RUN ---
 if __name__ == '__main__':
     init_db()
+
     app.run(debug=True)
