@@ -1,24 +1,36 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <title>Book a Pro</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Find Driving Lessons</title>
   <style>
-    body {font-family: Arial; margin: 40px;}
-    input, button, select {padding: 10px; margin: 5px; font-size: 16px;}
+    body { font-family: Arial, sans-serif; margin: 40px; background: #f4f4f4; }
+    .container { max-width: 500px; margin: auto; background: white; padding: 30px; border-radius: 10px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+    input, button { padding: 10px; margin: 10px 0; width: 100%; font-size: 16px; }
+    button { background: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer; }
+    button:hover { background: #0056b3; }
+    .flash { padding: 10px; margin: 10px 0; background: #fff3cd; border: 1px solid #ffeaa7; border-radius: 5px; }
   </style>
 </head>
 <body>
-  <h1>Book a Local Pro</h1>
-  <form method="POST">
-    <input type="text" name="zip_code" placeholder="Zip Code" maxlength="5" required>
-    <input type="date" name="date" min="{{ today }}" required>
-    <button type="submit">Search Availability</button>
-  </form>
-  <p><a href="/join">Are you a pro? Join here</a></p>
-  {% with messages = get_flashed_messages() %}
-    {% if messages %}
-      <ul>{% for msg in messages %}<li style="color:red;">{{ msg }}</li>{% endfor %}</ul>
-    {% endif %}
-  {% endwith %}
+  <div class="container">
+    <h1>Find Driving Lessons Near You</h1>
+    <form method="POST">
+      <input type="text" name="zip_code" placeholder="Enter ZIP Code (e.g. 10001)" required maxlength="5">
+      <input type="date" name="date" value="{{ today }}" required>
+      <button type="submit">Search Instructors</button>
+    </form>
+
+    {% with messages = get_flashed_messages() %}
+      {% if messages %}
+        {% for message in messages %}
+          <div class="flash">{{ message }}</div>
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
+
+    <p><small><a href="/join">Are you an instructor? Join now</a></small></p>
+  </div>
 </body>
 </html>
