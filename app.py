@@ -292,12 +292,22 @@ def join():
         return redirect(url_for('index'))
 
     return render_template('join.html')
+
+@app.route('/webhook', methods=['POST'])
+def webhook():
+    try:
+        payload = request.json
+        print(f"Webhook received: {payload}")
+        return jsonify({'status': 'ok'}), 200
+    except:
+        return jsonify({'status': 'error'}), 400
     
 # --- INIT ---
 init_db()
 
 if __name__ == '__main__':
     app.run(debug=True)
+
 
 
 
