@@ -25,8 +25,11 @@ if os.path.exists('nylas_credentials.json') and NYLAS_AVAILABLE:
     try:
         with open('nylas_credentials.json') as f:
             NYLAS_CONFIG = json.load(f)
-        nylas_client = NylasClient(NYLAS_CONFIG['api_key'])
-        print("Nylas connected")
+        if 'api_key' in NYLAS_CONFIG:
+            nylas_client = NylasClient(NYLAS_CONFIG['api_key'])
+            print("Nylas connected")
+        else:
+            print("Nylas: Missing api_key")
     except Exception as e:
         print(f"Nylas config error: {e}")
 else:
@@ -288,6 +291,7 @@ init_db()
 
 if __name__ == '__main__':
     app.run(debug=True)
+
 
 
 
