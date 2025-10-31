@@ -107,20 +107,22 @@ def init_db():
 def get_location_for_zip(zip_code: str) -> dict:
     try:
         zip_info = us.zips.get(zip_code)
-        if zip_info:
+        if zip_info and zip_info.city and zip_info.state:
             return {
                 'city': zip_info.city,
                 'state': zip_info.state,
                 'timezone': 'America/New_York',
                 'display': f"{zip_info.city}, {zip_info.state}"
             }
-    except:
-        pass
+    except Exception as e:
+        print(f"ZIP lookup failed: {e}")
+    
+    # Fallback
     return {
-        'city': 'Unknown',
-        'state': 'XX',
+        'city': 'New York',
+        'state': 'NY',
         'timezone': 'America/New_York',
-        'display': 'Unknown'
+        'display': 'New York, NY'
     }
 
 def get_partners_by_zip(zip_code: str) -> List[Partner]:
@@ -260,4 +262,5 @@ init_db()
 
 if __name__ == '__main__':
     app.run(debug=True)
+
 
