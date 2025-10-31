@@ -6,7 +6,6 @@ import os
 import sqlite3
 from dataclasses import dataclass
 from typing import List, Optional
-import us
 import json
 
 # Optional Nylas (safe if missing)
@@ -286,6 +285,7 @@ init_db()
 
 if __name__ == '__main__':
     app.run(debug=True)
+
 
 
 
