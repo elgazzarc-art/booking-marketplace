@@ -137,6 +137,7 @@ def get_location_for_zip(zip_code: str) -> dict:
         'timezone': 'America/New_York',
         'display': 'Unknown Location'
     }
+
 # --- PARTNERS BY ZIP ---
 def get_partners_by_zip(zip_code: str) -> List[Partner]:
     conn = sqlite3.connect(DB_NAME)
@@ -270,6 +271,7 @@ def search():
                        location=location['display'],
                        city=location['city'],
                        state=location['state'])
+
 @app.route('/book')
 def book():
     slot_start = request.args.get('slot')
@@ -341,6 +343,7 @@ def book():
         flash(f"Booking failed: {e}")
 
     return redirect(url_for('index'))
+
 # --- JOIN ROUTE (MULTI-ZIP + CALENDAR TYPE) ---
 @app.route('/join', methods=['GET', 'POST'])
 def join():
@@ -379,7 +382,8 @@ def join():
 
     return render_template('join.html')
 
-# --- INIT & RUN ---
-# --- INIT DB ON STARTUP (Render) ---
+# --- INIT DB ON STARTUP (FOR RENDER) ---
 init_db()
 
+if __name__ == '__main__':
+    app.run(debug=True)
