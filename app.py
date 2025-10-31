@@ -380,8 +380,6 @@ def join():
     return render_template('join.html')
 
 # --- INIT & RUN ---
-if __name__ == '__main__':
-    init_db()
-
-    app.run(debug=True)
+# --- INIT DB ON STARTUP (Render) ---
+init_db()
 
