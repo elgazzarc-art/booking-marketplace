@@ -84,19 +84,14 @@ def init_db():
     conn.commit()
     conn.close()
 
-# --- GOOGLE AUTH ---
+# --- GOOGLE SERVICE ACCOUNT (FOR RENDER) ---
 def get_service_for_partner(token_path: str):
-    creds = None
-    if os.path.exists(token_path):
-        creds = Credentials.from_authorized_user_file(token_path, SCOPES)
-    if not creds or not creds.valid:
-        if creds and creds.expired and creds.refresh_token:
-            creds.refresh(Request())
-        else:
-            flow = InstalledAppFlow.from_client_secrets_file('credentials.json', SCOPES)
-            creds = flow.run_local_server(port=0)
-        with open(token_path, 'w') as f:
-            f.write(creds.to_json())
+    from google.oauth2 import service_account
+    creds = service_account.Credentials.from_service_account_file(
+        'service_account.json',
+        scopes=SCOPES
+    )
+    # Share your calendar with the service account email
     return build('calendar', 'v3', credentials=creds)
 
 # --- ZIP → CITY ---
@@ -270,4 +265,5 @@ def join():
     
 # --- INIT ---
 init_db()
+
 
