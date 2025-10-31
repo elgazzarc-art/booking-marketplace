@@ -172,16 +172,22 @@ def search():
         flash("Invalid date")
         return redirect(url_for('index'))
 
+    print(f"DEBUG: ZIP={zip_code}, DATE={selected_date}")  # ← ADD THIS
     partners = get_partners_by_zip(zip_code)
+    print(f"DEBUG: Found {len(partners)} partners")  # ← ADD THIS
+
     if not partners:
         flash("No instructors in this area")
         return redirect(url_for('index'))
 
     location = get_location_for_zip(zip_code)
     local_tz_str = location['timezone']
+    print(f"DEBUG: Location={location['display']}")  # ← ADD THIS
     availability = {}
     for partner in partners:
+        print(f"DEBUG: Processing partner {partner.name}")  # ← ADD THIS
         slots = get_available_slots(partner, selected_date, local_tz_str)
+        print(f"DEBUG: Found {len(slots)} slots for {partner.name}")  # ← ADD THIS
         if slots:
             availability[partner.id] = {'partner': partner, 'slots': slots}
 
@@ -262,5 +268,6 @@ init_db()
 
 if __name__ == '__main__':
     app.run(debug=True)
+
 
 
