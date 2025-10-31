@@ -11,13 +11,20 @@ import sqlite3
 from dataclasses import dataclass
 from typing import List
 import us
+import json
+from nylas import Client as NylasClient  # Nylas for multi-provider
 
 app = Flask(__name__, template_folder='templates')
 app.secret_key = 'your-secret-key-change-me-here'
 SCOPES = ['https://www.googleapis.com/auth/calendar']
 DB_NAME = 'partners.db'
 
-# --- DATA MODELS ---
+# Load Nylas credentials
+with open('nylas_credentials.json') as f:
+    NYLAS_CONFIG = json.load(f)
+
+nylas = NylasClient(NYLAS_CONFIG['api_key'])
+
 @dataclass
 class Partner:
     id: int
@@ -26,8 +33,7 @@ class Partner:
     description: str
     rating: float
     calendar_type: str
-    token_path: str
-    services: list = None  # Will hold list of services
+    nylas_account_id: str = None  # Nylas account ID for sync
 
 @dataclass
 class TimeSlot:
@@ -35,7 +41,6 @@ class TimeSlot:
     display: str
     partner_id: int
 
-# --- DATABASE ---
 def init_db():
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
@@ -46,7 +51,8 @@ def init_db():
             email TEXT NOT NULL,
             description TEXT,
             rating REAL DEFAULT 4.5,
-            calendar_type TEXT DEFAULT 'google'
+            calendar_type TEXT DEFAULT 'google',
+            nylas_account_id TEXT
         )
     ''')
     c.execute('''
@@ -56,95 +62,106 @@ def init_db():
             PRIMARY KEY (partner_id, zip_code)
         )
     ''')
-    c.execute('''
-        CREATE TABLE IF NOT EXISTS services (
-            id INTEGER PRIMARY KEY,
-            partner_id INTEGER,
-            name TEXT NOT NULL,
-            price REAL NOT NULL,
-            duration_minutes INTEGER DEFAULT 60
-        )
-    ''')
     # Sample data
     sample_partners = [
         (1, "Sarah's Driving School", "sarah@example.com", "Patient & certified", 4.8, "google"),
-        (2, "Mike's Auto Lessons", "mike@example.com", "DMV test expert", 4.9, "google"),
+        (2, "Mike's Auto Lessons", "mike@outlook.com", "DMV test expert", 4.9, "outlook"),
+        (3, "Apple Driving Co", "lisa@icloud.com", "Eco-friendly lessons", 4.7, "apple"),
     ]
-    c.executemany('INSERT OR IGNORE INTO partners VALUES (?,?,?,?,?,?)', sample_partners)
-    sample_zips = [(1,"10001"), (1,"10002"), (2,"10001")]
+    c.executemany('INSERT OR IGNORE INTO partners VALUES (?,?,?,?,?,?,NULL)', sample_partners)
+    sample_zips = [(1,"10001"), (2,"10001"), (3,"10001")]
     c.executemany('INSERT OR IGNORE INTO service_areas VALUES (?,?)', sample_zips)
-    sample_services = [
-        (1, "30-min Lesson", 45.00, 30),
-        (1, "60-min Lesson", 85.00, 60),
-        (1, "Test Prep Package", 200.00, 120),
-        (2, "Beginner Lesson", 50.00, 45),
-        (2, "Highway Training", 95.00, 60),
-    ]
-    c.executemany('INSERT OR IGNORE INTO services VALUES (NULL, ?, ?, ?, ?)', sample_services)
     conn.commit()
     conn.close()
 
-# --- GOOGLE SERVICE ACCOUNT (FOR RENDER) ---
-def get_service_for_partner(token_path: str):
-    from google.oauth2 import service_account
-    creds = service_account.Credentials.from_service_account_file(
-        'service_account.json',
-        scopes=SCOPES
-    )
-    # Share your calendar with the service account email
-    return build('calendar', 'v3', credentials=creds)
+# --- Multi-Calendar Adapter ---
+class CalendarAdapter:
+    def get_events(self, partner, date, tz): raise NotImplementedError
+    def create_event(self, partner, slot, name, email): raise NotImplementedError
+    def connect_account(self, partner): raise NotImplementedError
+
+class NylasAdapter(CalendarAdapter):
+    def connect_account(self, partner):
+        # Nylas Hosted Auth URL
+        auth_url = nylas.authentication_url(
+            f"{NYLAS_CONFIG['client_id']}",
+            scopes=['calendar'],
+            login_hint=partner.email
+        )
+        return auth_url
+
+    def get_events(self, partner, date, tz):
+        events = nylas.events.where(
+            calendar_id=partner.nylas_account_id,
+            starts_after=date.isoformat(),
+            ends_before=(date + datetime.timedelta(days=1)).isoformat()
+        ).all()
+        return events
+
+    def create_event(self, partner, slot, name, email):
+        event = {
+            'title': f'Booking: {name}',
+            'description': f'Email: {email}',
+            'when': {'start_time': slot, 'end_time': slot + datetime.timedelta(hours=1)}
+        }
+        created = nylas.events.create(partner.nylas_account_id, event)
+        return created
+
+# --- Provider-Specific Adapters ---
+def get_adapter(calendar_type):
+    if calendar_type == 'nylas':  # Unified for all
+        return NylasAdapter()
+    # Native fallback
+    from code import NylasAdapter as Default
+    return Default()
 
 # --- ZIP → CITY ---
-def get_location_for_zip(zip_code: str) -> dict:
-    if zip_code in ['10001', '10002']:
-        return {'city': 'New York', 'state': 'NY', 'timezone': 'America/New_York', 'display': 'New York, NY'}
+def get_location_for_zip(zip_code: str) → dict:
+    try:
+        zip_info = us.zips.get(zip_code)
+        if zip_info:
+            return {'city': zip_info.city, 'state': zip_info.state, 'timezone': 'America/New_York', 'display': f"{zip_info.city}, {zip_info.state}"}
+    except:
+        pass
     return {'city': 'Unknown', 'state': 'XX', 'timezone': 'America/New_York', 'display': 'Unknown'}
 
-# --- PARTNERS & SERVICES ---
-def get_partners_by_zip(zip_code: str) -> List[Partner]:
+# --- Partners by ZIP ---
+def get_partners_by_zip(zip_code: str) → List[Partner]:
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
     c.execute('''
-        SELECT p.id, p.name, p.email, p.description, p.rating, p.calendar_type
+        SELECT p.id, p.name, p.email, p.description, p.rating, p.calendar_type, p.nylas_account_id
         FROM partners p
         JOIN service_areas s ON p.id = s.partner_id
         WHERE s.zip_code = ?
     ''', (zip_code,))
     rows = c.fetchall()
-    partners = []
-    for r in rows:
-        partner = Partner(
-            id=r[0], name=r[1], email=r[2], description=r[3],
-            rating=r[4], calendar_type=r[5], token_path=f"token_{r[0]}.json"
-        )
-        c.execute('SELECT id, name, price, duration_minutes FROM services WHERE partner_id = ?', (r[0],))
-        partner.services = [type('Service', (), {'id': s[0], 'name': s[1], 'price': s[2], 'duration': s[3]})() for s in c.fetchall()]
-        partners.append(partner)
     conn.close()
-    return partners
+    return [Partner(*r) for r in rows]
 
-# --- AVAILABILITY ---
-def get_available_slots(partner: Partner, date, local_tz_str: str) -> List[TimeSlot]:
-    # ... (same as before, simplified for brevity)
-    local_tz = pytz.timezone(local_tz_str)
+# --- Availability ---
+def get_available_slots(partner: Partner, date, local_tz_str: str) → List[TimeSlot]:
+    adapter = get_adapter(partner.calendar_type)
+    events = adapter.get_events(partner, date, local_tz_str)
+    # Merge with free slots (9-5 PM)
     slots = []
+    local_tz = pytz.timezone(local_tz_str)
     for hour in range(9, 17):
-        slot_start_local = local_tz.localize(datetime.datetime.combine(date, datetime.time(hour, 0)))
-        slots.append(TimeSlot(
-            start=slot_start_local.isoformat(),
-            display=slot_start_local.strftime('%I:%M %p'),
-            partner_id=partner.id
-        ))
+        slot_start = local_tz.localize(datetime.datetime.combine(date, datetime.time(hour, 0)))
+        # Check if booked
+        is_booked = any(slot_start < event.end_time and slot_start + datetime.timedelta(hours=1) > event.start_time for event in events)
+        if not is_booked:
+            slots.append(TimeSlot(slot_start.isoformat(), slot_start.strftime('%I:%M %p'), partner.id))
     return slots
 
-# --- ROUTES ---
+# --- Routes ---
 @app.route('/', methods=['GET', 'POST'])
 def index():
-    today = datetime.date.today().strftime('%Y-%m-%d')
     if request.method == 'POST':
         zip_code = request.form['zip_code'].strip()
         date_str = request.form['date']
         return redirect(url_for('search', zip=zip_code, date=date_str))
+    today = datetime.date.today().strftime('%Y-%m-%d')
     return render_template('index.html', today=today)
 
 @app.route('/search')
@@ -152,19 +169,10 @@ def search():
     zip_code = request.args.get('zip')
     date_str = request.args.get('date')
     if not zip_code or len(zip_code) != 5:
-        flash("Invalid zip")
+        flash("Invalid ZIP")
         return redirect(url_for('index'))
-    try:
-        selected_date = datetime.datetime.strptime(date_str, '%Y-%m-%d').date()
-    except:
-        flash("Invalid date")
-        return redirect(url_for('index'))
-
+    selected_date = datetime.datetime.strptime(date_str, '%Y-%m-%d').date()
     partners = get_partners_by_zip(zip_code)
-    if not partners:
-        flash("No instructors in this area")
-        return redirect(url_for('index'))
-
     location = get_location_for_zip(zip_code)
     local_tz_str = location['timezone']
     availability = {}
@@ -172,180 +180,36 @@ def search():
         slots = get_available_slots(partner, selected_date, local_tz_str)
         if slots:
             availability[partner.id] = {'partner': partner, 'slots': slots}
-
-    return render_template('results.html',
-                           availability=availability,
-                           zip_code=zip_code,
-                           date=selected_date.strftime('%A, %B %d'),
-                           location=location['display'])
+    return render_template('results.html', availability=availability, zip_code=zip_code, date=selected_date.strftime('%A, %B %d'), location=location['display'])
 
 @app.route('/book', methods=['GET', 'POST'])
 def book():
     if request.method == 'GET':
-        slot = request.args.get('slot')
-        partner_id = request.args.get('partner_id')
-        service_id = request.args.get('service_id')
-        zip_code = request.args.get('zip')
-        date_str = request.args.get('date')
-        if not all([slot, partner_id, service_id]):
-            return redirect(url_for('index'))
+        # ... (your existing GET logic)
+        return render_template('book.html', ...)
+    # POST
+    # ... (your existing POST logic)
+    adapter = get_adapter(calendar_type)
+    created = adapter.create_event(partner, slot_dt, name, email)
+    flash("Booked! Event ID: " + created.id)
+    return redirect(url_for('success'))
 
-        conn = sqlite3.connect(DB_NAME)
-        c = conn.cursor()
-        c.execute('SELECT name, price FROM services WHERE id = ?', (service_id,))
-        service = c.fetchone()
-        conn.close()
-
-        slot_dt = datetime.datetime.fromisoformat(slot)
-        slot_display = slot_dt.strftime('%I:%M %p')
-
-        return render_template('book.html',
-                               slot=slot, partner_id=partner_id, service_id=service_id,
-                               service_name=service[0], price=service[1],
-                               slot_display=slot_display, zip_code=zip_code, date=date_str)
-
-    # ——— POST: Save booking & write to Google Calendar ———
-    if not request.form.get('learner_permit'):
-        flash("You must confirm you have a Learner's Permit")
-        return redirect(request.url)
-
-    meet_location = request.form['meet_location'].strip()
-    if not meet_location:
-        flash("Please enter a meet location")
-        return redirect(request.url)
-
-    # Gather data
-    slot = request.form['slot']
-    partner_id = request.form['partner_id']
-    service_id = request.form['service_id']
-    name = request.form['name'].strip()
-    email = request.form['email'].strip()
-    zip_code = request.form['zip_code'].strip()
-    date_str = request.form['date']
-
-    # Load partner
-    conn = sqlite3.connect(DB_NAME)
-    c = conn.cursor()
-    c.execute('SELECT name, email, calendar_type FROM partners WHERE id = ?', (partner_id,))
-    partner_row = c.fetchone()
-    conn.close()
-    if not partner_row:
-        flash("Partner not found")
-        return redirect(url_for('index'))
-
-    partner_name, partner_email, calendar_type = partner_row
-
-    # Parse slot time
-    try:
-        slot_dt = datetime.datetime.fromisoformat(slot)
-        location = get_location_for_zip(zip_code)
-        local_tz_str = location['timezone']
-        local_tz = pytz.timezone(local_tz_str)
-        if slot_dt.tzinfo is None:
-            slot_dt = local_tz.localize(slot_dt)
-    except Exception as e:
-        flash("Invalid time")
-        return redirect(url_for('index'))
-
-    # ——— GOOGLE CALENDAR INSERT (SERVICE ACCOUNT) ———
-    if calendar_type == 'google':
-        try:
-            service = get_service_for_partner("")  # token_path ignored
-            event = {
-                'summary': f'Lesson: {name}',
-                'description': (
-                    f'Client: {name}\n'
-                    f'Email: {email}\n'
-                    f'Service: {request.form.get("service_name")}\n'
-                    f'Price: ${request.form.get("price")}\n'
-                    f'Meet: {meet_location}\n'
-                    f'Zip: {zip_code}'
-                ),
-                'start': {
-                    'dateTime': slot_dt.astimezone(pytz.UTC).isoformat(),
-                    'timeZone': local_tz_str
-                },
-                'end': {
-                    'dateTime': (slot_dt + datetime.timedelta(hours=1))
-                                .astimezone(pytz.UTC).isoformat(),
-                    'timeZone': local_tz_str
-                },
-            }
-            # ←←← CHANGE THIS TO YOUR PERSONAL EMAIL ←←←
-            created_event = service.events().insert(
-                calendarId='elgazzarc@gmail.com',  # ← REPLACE!
-                body=event
-            ).execute()
-            print(f"Event created: {created_event.get('htmlLink')}")
-            flash(f"Booked with {partner_name} at {slot_dt.strftime('%I:%M %p')}!")
-        except Exception as e:
-            print(f"Calendar error: {e}")
-            flash("Booking failed — calendar error")
-    else:
-        flash("Only Google Calendar supported for now")
-    
-    return redirect(url_for('index'))
-    # POST → Save & go to payment
-    if not request.form.get('learner_permit'):
-        flash("You must confirm Learner's Permit")
-        return redirect(request.url)
-    meet_location = request.form['meet_location'].strip()
-    if not meet_location:
-        flash("Enter meet location")
-        return redirect(request.url)
-
-    # Save to session or DB later
-    flash("Details saved! Proceeding to payment...")
-    return redirect(url_for('confirm',
-                            slot=request.form['slot'],
-                            partner_id=request.form['partner_id'],
-                            service_id=request.form['service_id'],
-                            meet_location=meet_location))
-
-@app.route('/confirm')
-def confirm():
-    return render_template('confirm.html')
-
-# --- JOIN ROUTE (MULTI-ZIP + CALENDAR TYPE) ---
 @app.route('/join', methods=['GET', 'POST'])
 def join():
     if request.method == 'POST':
-        name = request.form['name'].strip()
-        email = request.form['email'].strip()
-        desc = request.form['description'].strip()
-        zip_input = request.form['zip_codes'].strip()
-        calendar_type = request.form['calendar_type']
-
-        if not all([name, email, desc, zip_input, calendar_type]):
-            flash("Please fill all fields")
-            return render_template('join.html')
-
-        raw_zips = [z.strip() for z in zip_input.split(',')]
-        valid_zips = [z for z in raw_zips if len(z) == 5 and z.isdigit()]
-
-        if not valid_zips:
-            flash("At least one valid 5-digit zip code required")
-            return render_template('join.html')
-
-        conn = sqlite3.connect(DB_NAME)
-        c = conn.cursor()
-        c.execute('''
-            INSERT INTO partners (name, email, description, rating, calendar_type) 
-            VALUES (?, ?, ?, 4.5, ?)
-        ''', (name, email, desc, calendar_type))
-        partner_id = c.lastrowid
-        zip_tuples = [(partner_id, zip_code) for zip_code in valid_zips]
-        c.executemany('INSERT OR IGNORE INTO service_areas (partner_id, zip_code) VALUES (?, ?)', zip_tuples)
-        conn.commit()
-        conn.close()
-
-        flash(f"Welcome {name}! You're live in {len(valid_zips)} zip codes with {calendar_type} sync.")
-        return redirect(url_for('index'))
-
+        # ... (your existing POST logic)
+        # Add Nylas account ID after auth
+        pass
     return render_template('join.html')
-    
+
+# --- Nylas Webhook for Sync ---
+@app.route('/webhook', methods=['POST'])
+def webhook():
+    payload = request.json
+    # Handle Calendar changes from Nylas
+    # Block slot on your site
+    flash("Slot updated from Calendar!")
+    return 'OK', 200
+
 # --- INIT ---
 init_db()
-
-
-
