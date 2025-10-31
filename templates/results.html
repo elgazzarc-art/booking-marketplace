@@ -71,7 +71,7 @@
           <!-- Outlook Connect Button -->
           {% if partner.calendar_type == 'outlook' and not (partner.id | string + '.json') in [] %}
             <div class="connect">
-              <a href="{{ url_for('login_outlook', partner_id=partner.id) }}">Connect Outlook Calendar</a>
+              <!-- Calendar sync coming soon! -->
             </div>
           {% endif %}
 
@@ -109,4 +109,5 @@
     </div>
   </div>
 </body>
+
 </html>
