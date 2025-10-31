@@ -13,10 +13,25 @@ import json
 try:
     from nylas import APIClient as NylasClient
     NYLAS_AVAILABLE = True
+    print("Nylas loaded successfully")
 except ImportError:
     NYLAS_AVAILABLE = False
     print("Nylas not installed - using Google only")
 
+# Load Nylas config safely
+NYLAS_CONFIG = {}
+nylas_client = None
+if os.path.exists('nylas_credentials.json') and NYLAS_AVAILABLE:
+    try:
+        with open('nylas_credentials.json') as f:
+            NYLAS_CONFIG = json.load(f)
+        nylas_client = NylasClient(NYLAS_CONFIG['api_key'])
+        print("Nylas connected")
+    except Exception as e:
+        print(f"Nylas config error: {e}")
+else:
+    print("Nylas not configured - skipping")
+    
 app = Flask(__name__, template_folder='templates')
 app.secret_key = os.environ.get('SECRET_KEY', 'dev-key-change-me')
 
@@ -273,6 +288,7 @@ init_db()
 
 if __name__ == '__main__':
     app.run(debug=True)
+
 
 
 
