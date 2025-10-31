@@ -1,0 +1,17 @@
+<h2>Confirm Your Lesson</h2>
+<p><strong>Time:</strong> {{ slot_display }}</p>
+<p><strong>Service:</strong> {{ service_name }} - ${{ price }}</p>
+
+<form method="POST">
+  <label>
+    <input type="checkbox" name="learner_permit" required>
+    I confirm I have my Learner's Permit
+  </label><br><br>
+
+  <label>
+    Meet instructor at:<br>
+    <input type="text" name="meet_location" placeholder="e.g. Starbucks, 123 Main St" required style="width:300px;">
+  </label><br><br>
+
+  <button type="submit">Continue to Payment →</button>
+</form>
