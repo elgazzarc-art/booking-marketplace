@@ -40,6 +40,12 @@
 
     <button type="submit">Join & Connect Calendar</button>
   </form>
+
+  <button type="submit">Join</button>
+  <br><br>
+  <div>
+    <a href="{{ adapter.connect_account_url }}">Connect {{ calendar_type }} Calendar</a>
+  </div>
   
   <div class="tip">
     <strong>Tip:</strong> After joining, search your zip code to connect your calendar. You'll be prompted to log in.
@@ -53,4 +59,5 @@
     {% endif %}
   {% endwith %}
 </body>
+
 </html>
