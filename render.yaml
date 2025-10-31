@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: booking-marketplace
+    name: booking-live
     env: python
     buildCommand: |
       pip install --upgrade pip
