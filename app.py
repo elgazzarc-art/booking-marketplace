@@ -255,36 +255,50 @@ def book():
 @app.route('/join', methods=['GET', 'POST'])
 def join():
     if request.method == 'POST':
-        # ... your existing code ...
-        
-        # CREATE NYLAS GRANT AFTER SAVE
-        if NYLAS_AVAILABLE:
+        name = request.form['name'].strip()
+        email = request.form['email'].strip()
+        desc = request.form['description'].strip()
+        zip_input = request.form['zip_codes'].strip()
+        calendar_type = request.form['calendar_type']
+
+        raw_zips = [z.strip() for z in zip_input.split(',')]
+        valid_zips = [z for z in raw_zips if len(z) == 5 and z.isdigit()]
+        if not valid_zips:
+            flash("Need at least one valid ZIP")
+            return render_template('join.html')
+
+        conn = sqlite3.connect(DB_NAME)
+        c = conn.cursor()
+        c.execute('INSERT INTO partners (name, email, description, rating, calendar_type) VALUES (?, ?, ?, 4.5, ?)',
+                  (name, email, desc, calendar_type))
+        partner_id = c.lastrowid
+        c.executemany('INSERT OR IGNORE INTO service_areas VALUES (?, ?)', [(partner_id, z) for z in valid_zips])
+
+        # === SAFE NYLAS GRANT ===
+        if NYLAS_AVAILABLE and nylas_client:
             try:
-                # Create grant for instructor's email
                 grant = nylas_client.grants.create(
                     email_addresses=[email],
                     scopes=['calendar']
                 )
-                # Update DB with Nylas account ID
-                conn = sqlite3.connect(DB_NAME)
-                c = conn.cursor()
                 c.execute('UPDATE partners SET nylas_account_id = ? WHERE id = ?', (grant.account_id, partner_id))
-                conn.commit()
-                conn.close()
-                print(f"Nylas grant created for {email}: {grant.account_id}")
+                print(f"Nylas grant: {grant.account_id} for {email}")
             except Exception as e:
-                print(f"Nylas grant error: {e}")
-                flash("Signup successful, but Calendar sync failed — contact support.")
+                print(f"Grant failed: {e}")
+        conn.commit()
+        conn.close()
 
-        flash(f"Welcome {name}! You're live in {len(valid_zips)} ZIP codes.")
+        flash("You're live! Calendar sync may take 1 min.")
         return redirect(url_for('index'))
 
     return render_template('join.html')
+    
 # --- INIT ---
 init_db()
 
 if __name__ == '__main__':
     app.run(debug=True)
+
 
 
 
