@@ -150,7 +150,6 @@ def get_available_slots(partner: Partner, date, local_tz_str: str) -> List[TimeS
 
 @app.route('/', methods=['GET', 'POST'])
 def index():
- pick one:
     today = datetime.date.today().strftime('%Y-%m-%d')
     if request.method == 'POST':
         zip_code = request.form['zip_code'].strip()
@@ -261,3 +260,4 @@ init_db()
 
 if __name__ == '__main__':
     app.run(debug=True)
+
