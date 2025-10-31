@@ -230,5 +230,44 @@ def book():
 def confirm():
     return render_template('confirm.html')
 
+# --- JOIN ROUTE (MULTI-ZIP + CALENDAR TYPE) ---
+@app.route('/join', methods=['GET', 'POST'])
+def join():
+    if request.method == 'POST':
+        name = request.form['name'].strip()
+        email = request.form['email'].strip()
+        desc = request.form['description'].strip()
+        zip_input = request.form['zip_codes'].strip()
+        calendar_type = request.form['calendar_type']
+
+        if not all([name, email, desc, zip_input, calendar_type]):
+            flash("Please fill all fields")
+            return render_template('join.html')
+
+        raw_zips = [z.strip() for z in zip_input.split(',')]
+        valid_zips = [z for z in raw_zips if len(z) == 5 and z.isdigit()]
+
+        if not valid_zips:
+            flash("At least one valid 5-digit zip code required")
+            return render_template('join.html')
+
+        conn = sqlite3.connect(DB_NAME)
+        c = conn.cursor()
+        c.execute('''
+            INSERT INTO partners (name, email, description, rating, calendar_type) 
+            VALUES (?, ?, ?, 4.5, ?)
+        ''', (name, email, desc, calendar_type))
+        partner_id = c.lastrowid
+        zip_tuples = [(partner_id, zip_code) for zip_code in valid_zips]
+        c.executemany('INSERT OR IGNORE INTO service_areas (partner_id, zip_code) VALUES (?, ?)', zip_tuples)
+        conn.commit()
+        conn.close()
+
+        flash(f"Welcome {name}! You're live in {len(valid_zips)} zip codes with {calendar_type} sync.")
+        return redirect(url_for('index'))
+
+    return render_template('join.html')
+    
 # --- INIT ---
 init_db()
+
